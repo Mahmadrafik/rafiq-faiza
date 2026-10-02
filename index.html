@@ -849,23 +849,7 @@
         top: 12px;
         right: 12px;
         z-index: 20;
-        display: flex;
-        flex-direction: column;
-        align-items: flex-end;
-        gap: 8px;
       }
-
-      .music-player {
-        width: 200px;
-        height: 200px;
-        border-radius: 14px;
-        overflow: hidden;
-        border: 2px solid rgba(233, 205, 160, 0.85);
-        box-shadow: 0 10px 26px rgba(20, 6, 14, 0.45);
-        background: #000;
-      }
-
-      .music-dock.is-collapsed .music-player { display: none; }
 
       .music-toggle {
         padding: 8px 14px;
@@ -993,8 +977,8 @@
         </div>
       </div>
     </div>
-    <div class="music-dock is-collapsed" hidden>
-      <div class="music-player"><div id="yt-music"></div></div>
+    <div class="music-dock">
+      <audio id="bg-music" src="wedding-music.m4a" loop preload="auto"></audio>
       <button type="button" class="music-toggle" aria-pressed="false">&#9835; Play music</button>
     </div>
     <script>
@@ -1084,55 +1068,35 @@
       // Doors wait for a tap: browsers only allow sound after a user gesture.
       const musicDock = document.querySelector(".music-dock");
       const musicToggle = document.querySelector(".music-toggle");
-      const MUSIC_ID = "bdZVmasjVPI";
-      const musicAllowed = location.protocol === "https:" || location.protocol === "http:";
-      let ytPlayer = null;
-      let ytReady = false;
+      const music = document.getElementById("bg-music");
       let musicOn = false;
       let opened = false;
+      let fadeTimer;
 
       function setMusic(on) {
         musicOn = on;
-        // The YouTube player stays visible whenever it is playing.
-        musicDock.classList.toggle("is-collapsed", !on);
-        musicToggle.textContent = on ? "\u266B Hide music" : "\u266B Play music";
+        musicToggle.textContent = on ? "\u266B Music off" : "\u266B Play music";
         musicToggle.setAttribute("aria-pressed", String(on));
-        if (!ytReady) return;
+        window.clearInterval(fadeTimer);
         if (on) {
-          ytPlayer.setVolume(60);
-          ytPlayer.playVideo();
+          music.volume = 0;
+          music.play().catch(() => setMusic(false));
+          fadeTimer = window.setInterval(() => {
+            music.volume = Math.min(0.75, music.volume + 0.05);
+            if (music.volume >= 0.75) window.clearInterval(fadeTimer);
+          }, 120);
         } else {
-          ytPlayer.pauseVideo();
+          music.pause();
         }
       }
 
-      if (musicAllowed) {
-        musicDock.hidden = false;
-        window.onYouTubeIframeAPIReady = () => {
-          ytPlayer = new YT.Player("yt-music", {
-            width: 200,
-            height: 200,
-            videoId: MUSIC_ID,
-            playerVars: { playsinline: 1, loop: 1, playlist: MUSIC_ID, rel: 0, origin: location.origin },
-            events: {
-              onReady: () => {
-                ytReady = true;
-                if (musicOn) setMusic(true);
-              },
-            },
-          });
-        };
-        const ytScript = document.createElement("script");
-        ytScript.src = "https://www.youtube.com/iframe_api";
-        document.head.appendChild(ytScript);
-        musicToggle.addEventListener("click", () => setMusic(!musicOn));
-      }
+      musicToggle.addEventListener("click", () => setMusic(!musicOn));
 
       function openInvitation() {
         if (opened) return;
         opened = true;
         document.body.classList.remove("awaiting-open");
-        if (musicAllowed) setMusic(true);
+        setMusic(true);
       }
 
       document.addEventListener("click", (event) => {
