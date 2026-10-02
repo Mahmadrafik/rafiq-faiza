@@ -794,9 +794,84 @@
         .card.is-text-ready .scene.is-active > * { animation: none; }
         .card.is-revealed .scene.is-active > * { opacity: 1; }
       }
+
+      body.awaiting-open *:not(.petal),
+      body.awaiting-open *:not(.petal)::before,
+      body.awaiting-open *:not(.petal)::after {
+        animation-play-state: paused !important;
+      }
+
+      .open-invite {
+        position: absolute;
+        left: 50%;
+        bottom: calc(50% - var(--door-height) / 2 + 26px);
+        transform: translateX(-50%);
+        z-index: 5;
+        padding: 11px 26px;
+        border: 1px solid rgba(233, 205, 160, 0.9);
+        border-radius: 999px;
+        background: rgba(84, 28, 50, 0.9);
+        color: #fbefd9;
+        font: 600 0.82rem/1 Arial, Helvetica, sans-serif;
+        letter-spacing: 0.18em;
+        text-transform: uppercase;
+        box-shadow: 0 8px 22px rgba(30, 10, 20, 0.35);
+        cursor: pointer;
+        animation: openPulse 1.8s ease-in-out infinite;
+        transition: opacity 0.4s ease;
+      }
+
+      body:not(.awaiting-open) .open-invite {
+        opacity: 0;
+        pointer-events: none;
+      }
+
+      @keyframes openPulse {
+        0%, 100% { box-shadow: 0 8px 22px rgba(30,10,20,0.35), 0 0 0 0 rgba(233,205,160,0.55); }
+        50% { box-shadow: 0 8px 22px rgba(30,10,20,0.35), 0 0 0 10px rgba(233,205,160,0); }
+      }
+
+      body.awaiting-open .open-invite { animation-play-state: running !important; }
+
+      body.awaiting-open .card { pointer-events: none; }
+      body.awaiting-open { cursor: pointer; }
+
+      .music-dock {
+        position: fixed;
+        top: 12px;
+        right: 12px;
+        z-index: 20;
+        display: flex;
+        flex-direction: column;
+        align-items: flex-end;
+        gap: 8px;
+      }
+
+      .music-player {
+        width: 200px;
+        height: 200px;
+        border-radius: 14px;
+        overflow: hidden;
+        border: 2px solid rgba(233, 205, 160, 0.85);
+        box-shadow: 0 10px 26px rgba(20, 6, 14, 0.45);
+        background: #000;
+      }
+
+      .music-dock.is-collapsed .music-player { display: none; }
+
+      .music-toggle {
+        padding: 8px 14px;
+        border: 1px solid rgba(233, 205, 160, 0.9);
+        border-radius: 999px;
+        background: rgba(84, 28, 50, 0.92);
+        color: #fbefd9;
+        font: 600 0.75rem/1 Arial, Helvetica, sans-serif;
+        letter-spacing: 0.08em;
+        cursor: pointer;
+      }
     </style>
   </head>
-  <body>
+  <body class="awaiting-open">
     <div class="page">
       <span class="petal" style="--left: 4%; --fall: 9s; --delay: 0.2s; --rotate: -18deg; --drift: 32px;"></span>
       <span class="petal" style="--left: 12%; --fall: 11s; --delay: 1.4s; --rotate: 12deg; --drift: -28px;"></span>
@@ -825,6 +900,7 @@
       <span class="petal" style="--left: 88%; --fall: 10s; --delay: 6.5s; --rotate: 10deg; --drift: -24px;"></span>
       <span class="petal" style="--left: 98%; --fall: 8s; --delay: 4.4s; --rotate: -12deg; --drift: -34px;"></span>
       <div class="door-stage">
+      <button type="button" class="open-invite" aria-label="Open the invitation">Tap to open</button>
         <div class="door-glow"></div>
         <div class="door-frame">
           <div class="house-world" aria-hidden="true">
@@ -906,6 +982,10 @@
           </nav>
         </div>
       </div>
+    </div>
+    <div class="music-dock is-collapsed" hidden>
+      <div class="music-player"><div id="yt-music"></div></div>
+      <button type="button" class="music-toggle" aria-pressed="false">&#9835; Play music</button>
     </div>
     <script>
       const scenes = Array.from(document.querySelectorAll(".scene"));
@@ -990,6 +1070,64 @@
           }
         });
       }
+
+      // Doors wait for a tap: browsers only allow sound after a user gesture.
+      const musicDock = document.querySelector(".music-dock");
+      const musicToggle = document.querySelector(".music-toggle");
+      const MUSIC_ID = "bdZVmasjVPI";
+      const musicAllowed = location.protocol === "https:" || location.protocol === "http:";
+      let ytPlayer = null;
+      let ytReady = false;
+      let musicOn = false;
+      let opened = false;
+
+      function setMusic(on) {
+        musicOn = on;
+        // The YouTube player stays visible whenever it is playing.
+        musicDock.classList.toggle("is-collapsed", !on);
+        musicToggle.textContent = on ? "\u266B Hide music" : "\u266B Play music";
+        musicToggle.setAttribute("aria-pressed", String(on));
+        if (!ytReady) return;
+        if (on) {
+          ytPlayer.setVolume(60);
+          ytPlayer.playVideo();
+        } else {
+          ytPlayer.pauseVideo();
+        }
+      }
+
+      if (musicAllowed) {
+        musicDock.hidden = false;
+        window.onYouTubeIframeAPIReady = () => {
+          ytPlayer = new YT.Player("yt-music", {
+            width: 200,
+            height: 200,
+            videoId: MUSIC_ID,
+            playerVars: { playsinline: 1, loop: 1, playlist: MUSIC_ID, rel: 0, origin: location.origin },
+            events: {
+              onReady: () => {
+                ytReady = true;
+                if (musicOn) setMusic(true);
+              },
+            },
+          });
+        };
+        const ytScript = document.createElement("script");
+        ytScript.src = "https://www.youtube.com/iframe_api";
+        document.head.appendChild(ytScript);
+        musicToggle.addEventListener("click", () => setMusic(!musicOn));
+      }
+
+      function openInvitation() {
+        if (opened) return;
+        opened = true;
+        document.body.classList.remove("awaiting-open");
+        if (musicAllowed) setMusic(true);
+      }
+
+      document.addEventListener("click", (event) => {
+        if (!musicDock.contains(event.target)) openInvitation();
+      });
     </script>
   </body>
 </html>
